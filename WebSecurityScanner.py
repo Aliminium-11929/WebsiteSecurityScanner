@@ -189,7 +189,9 @@ class WebSecurityScanner:
 if __name__ == "__main__":
     argCount = len(sys.argv)
     if argCount < 2 or argCount > 3:
-        print("Usage: python scanner.py <target_url> <max_depth (default = 3)>")
+        print(
+            "Usage: python WebSecurityScanner.py <target_url> <max_depth (default = 3)>"
+        )
         sys.exit(1)
 
     target_url = sys.argv[1]
