@@ -1,3 +1,5 @@
+import json
+import os
 import re
 import sys
 import urllib.parse
@@ -6,7 +8,9 @@ from typing import Dict, List, Set
 
 import colorama
 import requests
+import tldextract
 from bs4 import BeautifulSoup
+from playwright.sync_api import sync_playwright
 
 
 class WebSecurityScanner:
@@ -19,6 +23,7 @@ class WebSecurityScanner:
             max_depth: Maximum depth for crawling links (default: 3)
         """
         self.target_url = target_url
+        self.domain = tldextract.extract(target_url).domain
         self.max_depth = max_depth
         self.visited_urls: Set[str] = set()
         self.vulnerabilities: List[Dict] = []
@@ -44,11 +49,19 @@ class WebSecurityScanner:
             return
         try:
             self.visited_urls.add(url)
-            response = self.session.get(url, verify=False)
-            soup = BeautifulSoup(response.text, "html.parser")
+            with sync_playwright() as p:
+                browser = p.chromium.launch()
+                page = browser.new_page()
+                page.goto(url)
+                page.wait_for_load_state("networkidle")
+                content = page.content()
+                browser.close()
+
+            soup = BeautifulSoup(content, "html.parser")
 
             # Find all links in the page
             links = soup.find_all("a", href=True)
+            print(f"Found {len(links)} links on {url}")
             for link in links:
                 href = link["href"]
                 next_url = urllib.parse.urljoin(
@@ -201,8 +214,15 @@ if __name__ == "__main__":
         else WebSecurityScanner(target_url)
     )
     vulnerabilities = scanner.scan()
+    os.makedirs("Vulnerabilities", exist_ok=True)
+
+    with open(f"Vulnerabilities/{scanner.domain}.json", "w") as vFilePointer:
+        json.dump(scanner.vulnerabilities, vFilePointer)
 
     # Print summary
     print(f"\n{colorama.Fore.GREEN}Scan Complete!{colorama.Style.RESET_ALL}")
+    print(
+        f'Vulnerabilities have been logged into "Vulnerabilities/{scanner.domain}.json"'
+    )
     print(f"Total URLs scanned: {len(scanner.visited_urls)}")
     print(f"Vulnerabilities found: {len(vulnerabilities)}")
